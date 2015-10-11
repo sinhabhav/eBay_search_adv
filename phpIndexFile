@@ -1,0 +1,260 @@
+<?php 
+		header ('Content-type: application/json');
+		header('Access-Control-Allow-Origin: *');
+		//header('Content-Type: application/x-json');
+		$i = 0;
+		$urlfilter="";
+		$keyword="";
+		$priceRangeFrom="";
+		$priceRangeTo="";
+		$Condition="";
+		$ListingType="";
+		$ReturnsAcceptedOnly="";
+		$FreeShippingOnly="";
+		$ExpeditedShippingType="";
+		$MaxHandlingTime ="";
+		$sortOrder = "";
+		$paginationInput = "";
+		$pageNo="1";
+		
+		$keyword = $_GET['aKeyWord'];
+		$safequery = urlencode(trim($keyword));
+		$priceRangeFrom = $_GET['priceRangeFrom'];
+		$priceRangeTo = $_GET['priceRangeTo'];
+		//$Condition = json_encode(stripslashes($_GET['Condition']));
+		if(isset($_GET['Condition']))
+			$Condition = $_GET['Condition'];
+		else
+			$Condition="";
+		if(isset($_GET['ListingType']))
+			$ListingType = $_GET['ListingType'];
+		if(isset($_GET['ReturnsAcceptedOnly']))
+			$ReturnsAcceptedOnly = $_GET['ReturnsAcceptedOnly'];
+		$FreeShippingOnly = $_GET['FreeShippingOnly'];
+		$ExpeditedShippingType = $_GET['ExpeditedShippingType'];
+		$MaxHandlingTime = $_GET['MaxHandlingTime'];
+		$sortOrder = $_GET['sortOrder'];
+		$paginationInput = $_GET['paginationInput'];
+		$pageNo = $_GET['pageNo'] + "";
+		  
+		if(!empty($priceRangeFrom) || ($priceRangeFrom=="0"))
+			{
+				$urlfilter .="&itemFilter[".$i."].name=MinPrice&itemFilter[".$i."].value=".$priceRangeFrom;
+				$i++;
+			}
+		if(!empty($priceRangeTo)||($priceRangeTo=="0"))
+			{
+				$urlfilter .="&itemFilter[".$i."].name=MaxPrice&itemFilter[".$i."].value=".$priceRangeTo;
+				$i++;
+			}
+		$cj=0;
+		$condiStr='';
+		if(!empty($Condition)) {
+			foreach($Condition as $check) {
+				$condiStr=$condiStr.'&'.'itemFilter['.$i.'].value['.$cj.']='.$check;
+				$cj++;
+			}
+			$urlfilter =$urlfilter . "&itemFilter(".$i.").name=Condition"."$condiStr";
+			$i++;
+		}
+		
+		if(!empty($ListingType))
+			{
+				$urlfilter .="&itemFilter[".$i."].name=ListingType";
+				$cl=0;
+				foreach ($ListingType as $lt){
+					$urlfilter .= "&itemFilter(".$i.").value(".$cl.")=".$lt;
+					$cl++;
+					}
+				$i++;
+			}
+			
+		if(!empty($ReturnsAcceptedOnly))
+			{
+				 $ReturnsAcceptedOnly='true';
+				 $urlfilter .="&itemFilter[".$i."].name=ReturnsAcceptedOnly&itemFilter[".$i."].value=".$ReturnsAcceptedOnly;
+				$i++;
+			}
+			
+		if(!empty($FreeShippingOnly))
+			{
+				$urlfilter .="&itemFilter[".$i."].name=FreeShippingOnly&itemFilter[".$i."].value=".$FreeShippingOnly;
+				$i++;
+			}
+			
+		if(!empty($ExpeditedShippingType))
+			{
+				 $urlfilter .="&itemFilter[".$i."].name=ExpeditedShippingType&itemFilter[".$i."].value=".$ExpeditedShippingType;
+				$i++;
+			}
+		
+		if(!empty($MaxHandlingTime)) {
+				$urlfilter =$urlfilter . "&itemFilter(".$i.").name=MaxHandlingTime". "&itemFilter(".$i.").value=$MaxHandlingTime";
+			}
+		 
+		if(!empty($sortOrder))
+			{
+				$urlfilter .= "&sortOrder=".$sortOrder;
+			}
+			
+		if(!empty($paginationInput))
+			{
+				$urlfilter .= "&paginationInput.entriesPerPage=".$paginationInput;
+			}	
+	
+		//echo $urlfilter;
+		
+		$apikey = 'USC89e95c-d201-423e-9411-3502d8bf717';
+		$endpoint = 'http://svcs.ebay.com/services/search/FindingService/v1?siteid=0&SECURITY-APPNAME=' . $apikey . '&OPERATION-NAME=findItemsAdvanced&SERVICE-VERSION=1.0.0&RESPONSE-DATA-FORMAT=XML&keywords=' .$safequery . $urlfilter.'&outputSelector[0]=SellerInfo&outputSelector[1]=PictureURLSuperSize&outputSelector[2]=StoreInfo&paginationInput.pageNumber='.$pageNo;
+		
+		error_reporting(E_ALL);
+		$resp = simplexml_load_file($endpoint);
+		
+		
+		$results='';
+		
+		if(!$resp || $resp->paginationOutput->totalEntries == 0)
+		{
+			$results .= "No results were found";
+			$output['ack'] = $results;
+		}
+		else
+		{
+			$output['ack'] = $resp->ack;
+			$output['resultCount'] = $resp->paginationOutput->totalEntries;
+			$output['pageNumber'] = $resp->paginationOutput->pageNumber;
+			$output['itemCount'] = $resp->paginationOutput->entriesPerPage;
+			
+			$itemNo = 0;
+			foreach($resp->searchResult->item as $item) 
+			{	
+				$basicInfo['title'] = $item->title;
+				$basicInfo['viewItemURL'] = $item->viewItemURL;
+				
+				if($item->galleryURL)
+				{
+				$pic   = $item->galleryURL;
+				}
+				else{
+				$pic = "http://pics.ebaystatic.com/aw/pics/express/icons/iconPlaceholder_96x96.gif";
+				}
+				$basicInfo['galleryURL'] = $pic;
+				
+				if($item->pictureURLSuperSize)
+				{
+				$picSuper   = $item->pictureURLSuperSize;
+				}
+				else{
+				$picSuper = "http://pics.ebaystatic.com/aw/pics/express/icons/iconPlaceholder_96x96.gif";
+				}
+				$basicInfo['pictureURLSuperSize'] = $picSuper;
+				
+				$basicInfo['convertedCurrentPrice'] = $item->sellingStatus->convertedCurrentPrice;
+				
+				$shippingCost = $item->shippingInfo->shippingServiceCost;
+				$shipping  ="";
+				if($shippingCost == 0.0 || $shippingCost =="")
+				{
+					$shipping  = "FREE";
+				}
+				else
+				{
+					$shipping= $item->shippingInfo->shippingServiceCost;
+				}
+				$basicInfo['shippingServiceCost'] = $shipping;
+				
+				$basicInfo['conditionDisplayName'] =  $item->condition->conditionDisplayName;
+				
+				$basicInfo['location'] = $item->location;
+				$basicInfo['categoryName'] = $item->primaryCategory->categoryName;
+				
+				$listing= $item->listingInfo->listingType;
+				if(((string)$listing == "FixedPrice") ||((string)$listing =="StoreInventory"))
+				{
+					$list = "Buy It Now";
+				}
+				elseif((string)$listing == "Auction")
+				{
+					$list ="Auction";
+				}
+				elseif((string)$listing == "Classified")
+				{
+					$list ="Classified Ad";
+				}
+				else
+				{
+					$list= $item->listingInfo->listingType;
+				}
+				$basicInfo['listingType'] = $list;
+				
+				$isTopRated = $item->topRatedListing;
+				if($isTopRated=="true")
+				{
+					$basicInfo['topRatedListing'] = "http://cs-server.usc.edu:45678/hw/hw6/itemTopRated.jpg\" alt=\"top rated\" height=\"50\" width=\"50";
+				}
+				else
+				{
+					$basicInfo['topRatedListing'] = "false";
+				}
+				
+				$sellerInfo['sellerUserName'] = $item->sellerInfo->sellerUserName;
+				$sellerInfo['feedbackScore'] = $item->sellerInfo->feedbackScore;
+				$sellerInfo['positiveFeedbackPercent'] = $item->sellerInfo->positiveFeedbackPercent;
+				$sellerInfo['feedbackRatingStar'] = $item->sellerInfo->feedbackRatingStar;
+				$sellerInfo['topRatedSeller'] = $item->sellerInfo->topRatedSeller;
+				$sellerInfo['storeName'] = $item->sellerInfo->sellerStoreName;
+				$sellerInfo['sellerStoreURL'] = $item->sellerInfo->storeURL;
+				
+				$shippingInfo['shippingType'] = $item->shippingInfo->shippingType;
+				
+				$shippingLoc="";
+				$flagFirst = True;
+				foreach($item->shippingInfo->shipToLocations as $loc) 
+				{
+					if($flagFirst)
+					{
+					$shippingLoc .= $loc;
+					$flagFirst = False;
+					}
+					else
+					{
+						$shippingLoc .= ",".$loc;
+					}
+				}
+				$shippingInfo['shipToLocations'] = $shippingLoc;
+				
+				$shippingInfo['expeditedShipping'] = $item->shippingInfo->expeditedShipping;
+				$shippingInfo['oneDayShippingAvailable'] = $item->shippingInfo->oneDayShippingAvailable;
+				$shippingInfo['returnsAccepted'] = $item->shippingInfo->returnsAccepted;
+				$shippingInfo['handlingTime'] = $item->shippingInfo->handlingTime;
+			
+				$itemArr = "item".$itemNo;
+				$output[$itemArr]['basicInfo'] = $basicInfo;
+				$output[$itemArr]['sellerInfo'] = $sellerInfo;
+				$output[$itemArr]['shippingInfo'] = $shippingInfo;
+				$itemNo = $itemNo +1;
+			}		
+		}
+		 //echo $results;
+		
+		//json
+		
+		echo json_encode($output);
+		//$callback = $_GET['callback'];
+
+		// Read the file as a string.
+		//$output = file_get_contents('MyDataFile.json');
+
+		//start output
+		/*if ($callback)
+		{
+			header ('Content-type: application/json');
+			header('Access-Control-Allow-Origin: *');
+			echo $callback . '(' . json_encode($output) . ');';
+		} 
+		else
+		{
+			header('Content-Type: application/x-json');
+			echo json_encode($output);
+		}*/
+?>
